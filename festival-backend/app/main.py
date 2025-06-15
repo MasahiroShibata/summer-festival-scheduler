@@ -6,7 +6,7 @@ from datetime import datetime
 
 from .models import (
     TeamName, Role, Todo, ProgressSummary, 
-    CreateRoleRequest, CreateTodoRequest, UpdateTodoRequest
+    CreateRoleRequest, CreateTodoRequest, UpdateTodoRequest, UpdateRoleRequest, UpdateTeamRequest
 )
 from .database import db
 
@@ -63,8 +63,34 @@ async def create_role(role_request: CreateRoleRequest):
     await manager.broadcast(json.dumps({
         "type": "role_created",
         "data": role.dict()
-    }))
+    }, default=str))
     return role
+
+@app.put("/api/roles/{role_id}", response_model=Role)
+async def update_role(role_id: str, role_request: UpdateRoleRequest):
+    try:
+        updates = {k: v for k, v in role_request.dict().items() if v is not None}
+        role = db.update_role(role_id, **updates)
+        await manager.broadcast(json.dumps({
+            "type": "role_updated",
+            "data": role.dict(),
+            "timestamp": datetime.now().isoformat()
+        }, default=str))
+        return role
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Role not found")
+
+@app.delete("/api/roles/{role_id}")
+async def delete_role(role_id: str):
+    if role_id in db.roles:
+        del db.roles[role_id]
+        await manager.broadcast(json.dumps({
+            "type": "role_deleted",
+            "role_id": role_id,
+            "timestamp": datetime.now().isoformat()
+        }, default=str))
+        return {"message": "Role deleted successfully"}
+    raise HTTPException(status_code=404, detail="Role not found")
 
 @app.get("/api/roles/{role_id}/todos", response_model=List[Todo])
 async def get_role_todos(role_id: str):
@@ -87,7 +113,7 @@ async def create_todo(todo_request: CreateTodoRequest):
         "type": "todo_created",
         "data": todo.dict(),
         "timestamp": datetime.now().isoformat()
-    }))
+    }, default=str))
     return todo
 
 @app.put("/api/todos/{todo_id}", response_model=Todo)
@@ -99,7 +125,7 @@ async def update_todo(todo_id: str, todo_request: UpdateTodoRequest):
             "type": "todo_updated",
             "data": todo.dict(),
             "timestamp": datetime.now().isoformat()
-        }))
+        }, default=str))
         return todo
     except ValueError:
         raise HTTPException(status_code=404, detail="Todo not found")
@@ -111,7 +137,7 @@ async def delete_todo(todo_id: str):
             "type": "todo_deleted",
             "todo_id": todo_id,
             "timestamp": datetime.now().isoformat()
-        }))
+        }, default=str))
         return {"message": "Todo deleted successfully"}
     raise HTTPException(status_code=404, detail="Todo not found")
 

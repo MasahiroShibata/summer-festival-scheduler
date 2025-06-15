@@ -60,3 +60,10 @@ class UpdateTodoRequest(BaseModel):
     status: Optional[TodoStatus] = None
     due_date: Optional[datetime] = None
     assigned_to: Optional[str] = None
+
+class UpdateRoleRequest(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+
+class UpdateTeamRequest(BaseModel):
+    new_name: str

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Calendar, BarChart3, Plus } from 'lucide-react'
+import { Calendar, BarChart3, Plus, Edit2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -48,9 +48,15 @@ function App() {
   const [ws, setWs] = useState<WebSocket | null>(null)
   const [isAddingRole, setIsAddingRole] = useState(false)
   const [isAddingTodo, setIsAddingTodo] = useState(false)
+  const [isEditingRole, setIsEditingRole] = useState(false)
+  const [isEditingTodo, setIsEditingTodo] = useState(false)
   const [selectedRole, setSelectedRole] = useState<string>('')
+  const [editingRoleId, setEditingRoleId] = useState<string>('')
+  const [editingTodoId, setEditingTodoId] = useState<string>('')
   const [newRole, setNewRole] = useState({ name: '', description: '' })
   const [newTodo, setNewTodo] = useState({ title: '', description: '', role_id: '', due_date: '', assigned_to: '' })
+  const [editRole, setEditRole] = useState({ name: '', description: '' })
+  const [editTodo, setEditTodo] = useState({ title: '', description: '', due_date: '', assigned_to: '' })
 
   useEffect(() => {
     fetchRoles()
@@ -71,6 +77,11 @@ function App() {
     websocket.onmessage = (event) => {
       const data = JSON.parse(event.data)
       if (data.type === 'todo_updated' || data.type === 'todo_created' || data.type === 'todo_deleted') {
+        fetchTodos()
+        fetchProgress()
+      }
+      if (data.type === 'role_updated' || data.type === 'role_created' || data.type === 'role_deleted') {
+        fetchRoles()
         fetchTodos()
         fetchProgress()
       }
@@ -158,6 +169,63 @@ function App() {
     } catch (error) {
       console.error('Failed to update todo:', error)
     }
+  }
+
+  const updateRole = async () => {
+    try {
+      const response = await fetch(`${API_URL}/api/roles/${editingRoleId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(editRole)
+      })
+      if (response.ok) {
+        setEditRole({ name: '', description: '' })
+        setIsEditingRole(false)
+        setEditingRoleId('')
+        fetchRoles()
+      }
+    } catch (error) {
+      console.error('Failed to update role:', error)
+    }
+  }
+
+  const updateTodo = async () => {
+    try {
+      const todoData = {
+        ...editTodo,
+        due_date: editTodo.due_date ? new Date(editTodo.due_date).toISOString() : null
+      }
+      const response = await fetch(`${API_URL}/api/todos/${editingTodoId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(todoData)
+      })
+      if (response.ok) {
+        setEditTodo({ title: '', description: '', due_date: '', assigned_to: '' })
+        setIsEditingTodo(false)
+        setEditingTodoId('')
+        fetchTodos()
+      }
+    } catch (error) {
+      console.error('Failed to update todo:', error)
+    }
+  }
+
+  const startEditingRole = (role: Role) => {
+    setEditingRoleId(role.id)
+    setEditRole({ name: role.name, description: role.description || '' })
+    setIsEditingRole(true)
+  }
+
+  const startEditingTodo = (todo: Todo) => {
+    setEditingTodoId(todo.id)
+    setEditTodo({ 
+      title: todo.title, 
+      description: todo.description || '', 
+      due_date: todo.due_date ? new Date(todo.due_date).toISOString().split('T')[0] : '',
+      assigned_to: todo.assigned_to || ''
+    })
+    setIsEditingTodo(true)
   }
 
   const getStatusColor = (status: string) => {
@@ -259,10 +327,24 @@ function App() {
                   onClick={() => setSelectedRole(selectedRole === role.id ? '' : role.id)}
                 >
                   <CardHeader>
-                    <CardTitle className="text-lg">{role.name}</CardTitle>
-                    {role.description && (
-                      <CardDescription>{role.description}</CardDescription>
-                    )}
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <CardTitle className="text-lg">{role.name}</CardTitle>
+                        {role.description && (
+                          <CardDescription>{role.description}</CardDescription>
+                        )}
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          startEditingRole(role)
+                        }}
+                      >
+                        <Edit2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </CardHeader>
                   <CardContent>
                     <div className="flex items-center justify-between">
@@ -347,6 +429,90 @@ function App() {
               </Dialog>
             </div>
 
+            <Dialog open={isEditingRole} onOpenChange={setIsEditingRole}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>役割を編集</DialogTitle>
+                  <DialogDescription>役割の名前と説明を変更できます</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="edit-role-name">役割名</Label>
+                    <Input
+                      id="edit-role-name"
+                      value={editRole.name}
+                      onChange={(e) => setEditRole({ ...editRole, name: e.target.value })}
+                      placeholder="例: 資材調達"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="edit-role-description">説明</Label>
+                    <Textarea
+                      id="edit-role-description"
+                      value={editRole.description}
+                      onChange={(e) => setEditRole({ ...editRole, description: e.target.value })}
+                      placeholder="役割の詳細説明"
+                    />
+                  </div>
+                  <div className="flex space-x-2">
+                    <Button onClick={updateRole} className="flex-1">更新</Button>
+                    <Button variant="outline" onClick={() => setIsEditingRole(false)} className="flex-1">キャンセル</Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
+
+            <Dialog open={isEditingTodo} onOpenChange={setIsEditingTodo}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>ToDoを編集</DialogTitle>
+                  <DialogDescription>ToDoの内容を変更できます</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="edit-todo-title">タイトル</Label>
+                    <Input
+                      id="edit-todo-title"
+                      value={editTodo.title}
+                      onChange={(e) => setEditTodo({ ...editTodo, title: e.target.value })}
+                      placeholder="ToDoのタイトル"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="edit-todo-description">説明</Label>
+                    <Textarea
+                      id="edit-todo-description"
+                      value={editTodo.description}
+                      onChange={(e) => setEditTodo({ ...editTodo, description: e.target.value })}
+                      placeholder="詳細説明"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="edit-todo-due-date">期限</Label>
+                    <Input
+                      id="edit-todo-due-date"
+                      type="date"
+                      value={editTodo.due_date}
+                      onChange={(e) => setEditTodo({ ...editTodo, due_date: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="edit-todo-assigned">担当者</Label>
+                    <Input
+                      id="edit-todo-assigned"
+                      value={editTodo.assigned_to}
+                      onChange={(e) => setEditTodo({ ...editTodo, assigned_to: e.target.value })}
+                      placeholder="担当者名"
+                    />
+                  </div>
+                  <div className="flex space-x-2">
+                    <Button onClick={updateTodo} className="flex-1">更新</Button>
+                    <Button variant="outline" onClick={() => setIsEditingTodo(false)} className="flex-1">キャンセル</Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
+
             <div className="space-y-4">
               {filteredTodos.map((todo) => (
                 <Card key={todo.id}>
@@ -371,6 +537,13 @@ function App() {
                         </div>
                       </div>
                       <div className="flex items-center space-x-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => startEditingTodo(todo)}
+                        >
+                          <Edit2 className="h-4 w-4" />
+                        </Button>
                         <Select value={todo.status} onValueChange={(value) => updateTodoStatus(todo.id, value)}>
                           <SelectTrigger className="w-32">
                             <SelectValue />

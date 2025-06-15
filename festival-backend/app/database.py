@@ -94,5 +94,16 @@ class InMemoryDatabase:
             del self.todos[todo_id]
             return True
         return False
+    
+    def update_role(self, role_id: str, **updates) -> Role:
+        if role_id not in self.roles:
+            raise ValueError("Role not found")
+        
+        role = self.roles[role_id]
+        for key, value in updates.items():
+            if value is not None and hasattr(role, key):
+                setattr(role, key, value)
+        
+        return role
 
 db = InMemoryDatabase()
